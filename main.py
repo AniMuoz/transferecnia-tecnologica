@@ -12,4 +12,3 @@ def procesar_deteccion(num_personas):
 ia.iniciar_deteccion(model_path='yolov8n.pt', intervalo=10, callback=procesar_deteccion)
 
 
-

@@ -463,22 +463,42 @@ def set_destination():
 
 # ==================== Ocupación ====================
 @app.route("/occupancy", methods=["POST"])
-def occupancy():
-    d = request.get_json(force=True, silent=True) or {}
-    bus_id=d.get("bus_id")
-    count=d.get("count")
-    status=d.get("status")
-    ts=d.get("ts")
-    cap=int(d.get("capacity",40))
-    if not bus_id or count is None or not status or not ts:
-        return jsonify({"ok":False,"error":"payload incompleto"}),400
-    pct=min(100.0,(int(count)/cap)*100.0)
-    OCUPACION[str(bus_id)]={"count":int(count),"status":str(status),"ts":str(ts),"capacity":cap,"pct":pct}
-    con=sqlite3.connect(DB);cur=con.cursor()
-    cur.execute("INSERT INTO ocupacion(bus_id,ts,count,status,capacity,pct) VALUES(?,?,?,?,?,?)",
-                (bus_id,ts,int(count),status,cap,pct))
-    con.commit();con.close()
-    return jsonify({"ok":True})
+@app.route("/occupancy/update", methods=["POST"])
+def occupancy_update():
+    data = request.get_json(force=True)
+
+    bus_id = data.get("bus_id")
+    count = data.get("count")
+    status = data.get("status", "unknown")    # <--- NUEVO
+    capacity = data.get("capacity", 40)
+
+    if not bus_id:
+        return jsonify({"ok": False, "error": "bus_id missing"}), 400
+    if count is None:
+        return jsonify({"ok": False, "error": "count missing"}), 400
+
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    # --- Guardar en memoria ---
+    OCUPACION[bus_id] = {
+        "count": count,
+        "status": status,   # <--- NUEVO
+        "capacity": capacity,
+        "ts": ts
+    }
+
+    # --- Guardar en SQLite ---
+    con = sqlite3.connect(DB)
+    cur = con.cursor()
+    cur.execute(
+        "INSERT INTO ocupacion (bus_id, ts, count, status, capacity, pct) VALUES (?,?,?,?,?,?)",
+        (bus_id, ts, count, status, capacity, count / capacity if capacity else None)
+    )
+    con.commit()
+    con.close()
+
+    return jsonify({"ok": True})
+
 
 @app.route("/occupancy/list")
 def occupancy_list():

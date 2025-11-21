@@ -6,24 +6,20 @@ import requests
 
 TRACKER_URL = "http://127.0.0.1:5000"  # donde corre tracker_server
 BUS_ID = "TURBUS"  # ID de la micro que estás monitoreando
-CAPACIDAD_BUS = 40  # capacidad total del bus
 
-def estado_micro(num_personas):
-    """Devuelve el estado textual según la cantidad de personas"""
-    if num_personas <= 20:
+def estado_micro(x):
+    if x <= 20:
         return "Asientos disponibles"
-    elif num_personas <= 30:
+    if x <= 30:
         return "Pasillo disponible"
-    else:
+    if x > 30:
         return "Llena"
 
-def enviar_estado(bus_id, num_personas):
-    estado = estado_micro(num_personas)
-
+def enviar_ocupacion(bus_id, count):
     payload = {
         "bus_id": bus_id,
-        "count": int(num_personas),             # OBLIGATORIO
-        "status": estado,                       # ESTADO QUE QUIERES
+        "count": count,
+        "status": estado_micro(count),
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "capacity": 40
     }
@@ -31,12 +27,14 @@ def enviar_estado(bus_id, num_personas):
     try:
         r = requests.post(f"{TRACKER_URL}/occupancy", json=payload)
         r.raise_for_status()
-        print(f"✅ Estado enviado al tracker: {estado}")
+        print(f"✅ Estado enviado: {payload}")
     except Exception as e:
-        print(f"❌ Error enviando estado: {e}")
+        print(f"❌ Error enviando ocupación: {e}")
 
 def iniciar_deteccion(model_path='yolov8n.pt', intervalo=10, output_folder='frames_detectados'):
-    """Detección de personas en tiempo real y envío del estado textual"""
+    """
+    Detección de personas en tiempo real con YOLO, actualizando ocupación en tracker_server.
+    """
     model = YOLO(model_path)
     os.makedirs(output_folder, exist_ok=True)
 
@@ -61,11 +59,10 @@ def iniciar_deteccion(model_path='yolov8n.pt', intervalo=10, output_folder='fram
 
             results = model(frame)
             num_personas = (results[0].boxes.cls == 0).sum().item()
-            estado = estado_micro(num_personas)
-            print(f"[{time.strftime('%H:%M:%S')}] Estado de la micro: {estado}")
+            print(f"[{time.strftime('%H:%M:%S')}] {num_personas} personas detectadas. {estado_micro(num_personas)}")
 
-            # 🔹 Enviar el estado textual al tracker_server
-            enviar_estado(BUS_ID, estado)
+            # 🔹 Enviar automáticamente la ocupación al tracker_server
+            enviar_ocupacion(BUS_ID, num_personas)
 
             annotated_frame = results[0].plot()
             save_path = os.path.join(output_folder, f"frame_{frame_id:04d}.jpg")

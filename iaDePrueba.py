@@ -17,19 +17,21 @@ def estado_micro(num_personas):
     else:
         return "Llena"
 
-def enviar_estado(bus_id, estado):
-    """Envía el estado de la micro al tracker_server"""
+def enviar_estado(bus_id, num_personas):
+    estado = estado_micro(num_personas)
+
     payload = {
         "bus_id": bus_id,
-        "count": None,          # opcional, se puede dejar vacío
-        "status": estado,       # enviamos el estado textual
+        "count": int(num_personas),             # OBLIGATORIO
+        "status": estado,                       # ESTADO QUE QUIERES
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "capacity": CAPACIDAD_BUS
+        "capacity": 40
     }
+
     try:
         r = requests.post(f"{TRACKER_URL}/occupancy", json=payload)
         r.raise_for_status()
-        print(f"✅ Estado enviado: {estado}")
+        print(f"✅ Estado enviado al tracker: {estado}")
     except Exception as e:
         print(f"❌ Error enviando estado: {e}")
 

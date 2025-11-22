@@ -305,12 +305,50 @@ tr { transition: background-color .24s ease, transform .18s ease }
           const occClass = occStatusToClass(occRaw);
 
           // build occ label
-          let occLabel = '—';
-          if(b.occ_count != null){
-            occLabel = `${b.occ_count}/${b.occ_capacity ?? '—'} (${b.occ_pct != null ? b.occ_pct + '%' : '—'})`;
-          } else if(occRaw) {
-            occLabel = String(occRaw);
-          }
+// build occ label (texto humano)
+let occLabel = '—';
+
+if(occRaw){
+
+  // Si viene porcentaje
+  if(String(occRaw).includes('%')){
+    const pct = parseInt(occRaw.replace('%',''));
+
+    if(pct < 40){
+      occLabel = 'Asientos Disponibles';
+    }
+    else if(pct < 85){
+      occLabel = 'Pasillo Disponible';
+    }
+    else {
+      occLabel = 'Lleno';
+    }
+  }
+
+  // Si viene formato tipo 10/40
+  else if(String(occRaw).includes('/')){
+    const [a,b] = String(occRaw).split('/').map(Number);
+    if(!isNaN(a) && !isNaN(b)){
+      const pct = (a/b)*100;
+
+      if(pct < 40){
+        occLabel = 'Asientos Disponibles';
+      }
+      else if(pct < 85){
+        occLabel = 'Pasillo Disponible';
+      }
+      else {
+        occLabel = 'Lleno';
+      }
+    }
+  }
+
+  // Si ya viene como texto
+  else {
+    occLabel = String(occRaw);
+  }
+}
+
 
           // ETA change highlight
           const prev = window.prevETAs[id];

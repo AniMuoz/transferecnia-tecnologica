@@ -1,0 +1,239 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Simulador buses → paradero</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  body{font-family:Arial, sans-serif; padding:12px; max-width:1100px; margin:auto}
+  h1{font-size:1.25rem;margin:6px 0}
+  .card{border:1px solid #ddd;border-radius:8px;padding:10px;margin:8px 0}
+  .row{display:flex;gap:8px}.row>*{flex:1}
+  input,button{padding:8px}
+  #map{height:420px;border-radius:8px}
+  table{width:100%;border-collapse:collapse}th,td{padding:6px;border-bottom:1px solid #eee;text-align:center}
+  .pill{display:inline-block;padding:2px 6px;border-radius:999px;background:#eee;font-size:12px;margin-left:4px}
+</style>
+</head>
+<body>
+<h1>Simulador buses → paradero</h1>
+<div id="status">Estado: listo</div>
+
+<div class="card">
+  <h3>Destino (paradero)</h3>
+  <div class="row">
+    <div><label>Lat</label><input id="destLat"></div>
+    <div><label>Lon</label><input id="destLon"></div>
+  </div>
+  <button id="setDestBtn">Establecer destino</button>
+</div>
+
+<div class="card">
+  <h3>Crear bus (ruta + paraderos reales OSM)</h3>
+  <div class="row">
+    <div><label>Bus ID</label><input id="busId" placeholder="bus001"></div>
+    <div><label>Velocidad (km/h)</label><input id="speed" value="25"></div>
+  </div>
+  <div class="row">
+    <div><label>Origen lat</label><input id="srcLat" placeholder="-33.02"></div>
+    <div><label>Origen lon</label><input id="srcLon" placeholder="-71.54"></div>
+  </div>
+  <div class="row">
+    <button id="startSimBtn">Iniciar simulación</button>
+    <button id="stopSimBtn">Detener</button>
+  </div>
+  <small>Las paradas se obtienen de OpenStreetMap a lo largo de la ruta.</small>
+</div>
+
+<div class="card"><h3>Mapa</h3><div id="map"></div></div>
+
+<div class="card">
+  <h3>Próximas llegadas</h3>
+  <div id="arrivals"></div>
+</div>
+
+<!--
+<div class="card">
+  <h3>RED (no oficial) — Próximos buses por paradero</h3>
+  <div class="row">
+    <input id="stopId" placeholder="PA433">
+    <button id="fetchStopBtn">Consultar</button>
+  </div>
+  <div id="stopData"></div>
+</div>
+-->
+
+<script>
+(function(){
+  const statusEl=document.getElementById('status');
+  const destLat=document.getElementById('destLat'); const destLon=document.getElementById('destLon');
+  const setDestBtn=document.getElementById('setDestBtn');
+  const busIdEl=document.getElementById('busId'); const speedEl=document.getElementById('speed');
+  const srcLatEl=document.getElementById('srcLat'); const srcLonEl=document.getElementById('srcLon');
+  const startSimBtn=document.getElementById('startSimBtn'); const stopSimBtn=document.getElementById('stopSimBtn');
+  const arrivalsEl=document.getElementById('arrivals');
+  const stopIdEl=document.getElementById('stopId'); const fetchStopBtn=document.getElementById('fetchStopBtn'); const stopDataEl=document.getElementById('stopData');
+
+  let map=L.map('map'); 
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+  let destMarker=L.marker([0,0],{title:'Paradero destino'}).addTo(map);
+  let busMarkers={}, polylines={}, stopMarkers={};
+
+  fetch('/get_destination').then(r=>r.json()).then(j=>{
+    const [la,lo]=j.destino; 
+    destLat.value=la; 
+    destLon.value=lo; 
+    destMarker.setLatLng([la,lo]); 
+    map.setView([la,lo],13);
+  });
+
+  setDestBtn.onclick=()=>{
+    const la=parseFloat(destLat.value), lo=parseFloat(destLon.value);
+    if(isNaN(la)||isNaN(lo)){alert('Destino inválido');return;}
+    fetch('/set_destination',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({lat:la,lon:lo})
+    }).then(()=>{
+      destMarker.setLatLng([la,lo]); 
+      map.setView([la,lo],13);
+    });
+  };
+
+  startSimBtn.onclick=async ()=>{
+    const id=(busIdEl.value||'bus001').trim(); 
+    const sp=parseFloat(speedEl.value||'25');
+    const la=parseFloat(srcLatEl.value), lo=parseFloat(srcLonEl.value);
+    if(isNaN(la)||isNaN(lo)){alert('Origen inválido');return;}
+
+    const res=await fetch('/sim/start',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({bus_id:id, lat:la, lon:lo, speed_kmh:sp})
+    });
+
+    const j=await res.json(); 
+    if(!j.ok){alert('No se pudo iniciar');return;}
+
+    if(j.points?.length>=2){ 
+      if(polylines[id]) map.removeLayer(polylines[id]);
+      polylines[id]=L.polyline(j.points,{weight:4,opacity:0.75}).addTo(map);
+      map.fitBounds(polylines[id].getBounds().pad(0.3));
+    }
+
+    if(stopMarkers[id]){
+      for(const m of stopMarkers[id]) map.removeLayer(m);
+    }
+
+    stopMarkers[id]=[];
+    (j.auto_stops||[]).forEach(s=>{
+      const mk=L.circleMarker([s[0],s[1]],{radius:5,opacity:0.9}).addTo(map);
+      mk.bindTooltip(s[2] ? `🚌 ${s[2]}` : 'Paradero');
+      stopMarkers[id].push(mk);
+    });
+  };
+
+  stopSimBtn.onclick=async ()=>{
+    const id=(busIdEl.value||'bus001').trim();
+    await fetch('/sim/stop',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({bus_id:id})
+    });
+
+    if(busMarkers[id]){map.removeLayer(busMarkers[id]); delete busMarkers[id];}
+    if(polylines[id]){map.removeLayer(polylines[id]); delete polylines[id];}
+    if(stopMarkers[id]){
+      for(const m of stopMarkers[id]) map.removeLayer(m);
+      delete stopMarkers[id];
+    }
+  };
+
+  async function refreshBuses(){
+    try{
+      const j=await (await fetch('/sim/buses')).json(); 
+      if(!j.ok) return;
+
+      const [dla,dlo]=j.destino; 
+      destMarker.setLatLng([dla,dlo]);
+
+      const list=[...j.buses].sort((a,b)=>a.eta_min-b.eta_min);
+
+      let html=`<table>
+        <tr>
+          <th>Bus</th>
+          <th>Dist</th>
+          <th>ETA</th>
+          <th>Paradas</th>
+          <!-- <th>Ocupación</th> -->
+          <!-- <th>%</th> -->
+          <th>Status</th>
+          <th>Estado</th>
+        </tr>`;
+
+      if(list.length===0){
+        html+=`<tr><td colspan="8"><i>Sin buses</i></td></tr>`;
+        statusEl.textContent='Estado: sin buses';
+      } else {
+        statusEl.textContent=`Próxima llegada: ${list[0].bus_id} en ${list[0].eta_min.toFixed(1)} min`;
+
+        for(const b of list){
+          const id=b.bus_id, la=b.lat, lo=b.lon;
+
+          if(!busMarkers[id]) 
+            busMarkers[id]=L.marker([la,lo],{title:id}).addTo(map); 
+          else 
+            busMarkers[id].setLatLng([la,lo]);
+
+          let tip=`${id}<br>Dist: ${b.distance_km.toFixed(2)} km<br>ETA: ${b.eta_min.toFixed(1)} min`;
+          if(b.is_dwell) tip+=`<br><span class="pill">Detenido</span>`;
+          busMarkers[id].bindTooltip(tip);
+
+          const si=b.stops_total>0?`${b.stops_next_idx}/${b.stops_total}`:'—';
+          const state=b.arrived?'En paradero':(b.is_dwell?'En parada':(b.has_route?'En ruta':'Recta'));
+
+          const occCount = b.occ_count ?? '—';
+          const occPct = b.occ_pct != null ? `${b.occ_pct}%` : '—';
+          const occStatus = b.occ_status ?? '—';
+
+          html+=`
+          <tr>
+            <td><b>${id}</b></td>
+            <td>${b.distance_km.toFixed(2)} km</td>
+            <td>${b.eta_min.toFixed(1)} min</td>
+            <td>${si}</td>
+            <!-- <td>${occCount}</td> -->
+            <!-- <td>${occPct}</td> -->
+            <td>${occStatus}</td>
+            <td>${state}</td>
+          </tr>`;
+        }
+      }
+
+      html+='</table>'; 
+      arrivalsEl.innerHTML=html;
+
+    } catch(e){}
+  }
+
+  setInterval(refreshBuses, 1000); 
+  refreshBuses();
+
+  fetchStopBtn.onclick=async()=>{
+    const s=(stopIdEl.value||'').trim(); 
+    if(!s){alert('Ingresa stop_id');return;}
+
+    try{ 
+      const j=await (await fetch('/red/arrivals/'+encodeURIComponent(s))).json(); 
+      stopDataEl.innerHTML='<pre>'+JSON.stringify(j.data||j,null,2)+'</pre>'; 
+    } catch(_){ 
+      stopDataEl.textContent='Error'; 
+    }
+  };
+})();
+</script>
+</body>
+</html>

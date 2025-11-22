@@ -232,22 +232,27 @@ tr { transition: background-color .24s ease, transform .18s ease }
   if(!window.prevETAs) window.prevETAs = {};
 
   // map of occ_status keywords to classes
-  function occStatusToClass(s){
+    function occStatusToClass(s){
     if(!s) return 'occ-unknown';
-    const t = String(s).toLowerCase();
-    if(t.includes('baja') || t.includes('low') ) return 'occ-baja';
-    if(t.includes('media') || t.includes('medium') || t.includes('med')) return 'occ-media';
-    if(t.includes('alta') || t.includes('high') || t.includes('alto')) return 'occ-alta';
-    if(t.includes('crit') || t.includes('llena') || t.includes('full')) return 'occ-critica';
-    // fallback: numeric pct
+
+    const t = String(s).toLowerCase().trim();
+
+    // TUS REGLAS exactas
+    if(t.includes('asientos')) return 'occ-baja';     // verde
+    if(t.includes('pasillo')) return 'occ-media';     // amarillo
+    if(t.includes('lleno') || t.includes('llena') || t.includes('completo')) 
+        return 'occ-critica';                            // rojo
+
+    // fallback: porcentaje si viene en número
     const n = parseInt(t.replace('%',''));
     if(!isNaN(n)){
-      if(n < 40) return 'occ-baja';
-      if(n < 75) return 'occ-media';
-      return 'occ-alta';
+        if(n < 40) return 'occ-baja';
+        if(n < 75) return 'occ-media';
+        return 'occ-critica';
     }
+
     return 'occ-unknown';
-  }
+    }
 
   // determine state class from bus flags
   function stateClassFor(bus){

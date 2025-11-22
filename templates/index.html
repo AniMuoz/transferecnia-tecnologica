@@ -4,78 +4,269 @@
 <meta charset="utf-8" />
 <title>Simulador buses → paradero</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <style>
-  body{font-family:Arial, sans-serif; padding:12px; max-width:1100px; margin:auto}
-  h1{font-size:1.25rem;margin:6px 0}
-  .card{border:1px solid #ddd;border-radius:8px;padding:10px;margin:8px 0}
-  .row{display:flex;gap:8px}.row>*{flex:1}
-  input,button{padding:8px}
-  #map{height:420px;border-radius:8px}
-  table{width:100%;border-collapse:collapse}th,td{padding:6px;border-bottom:1px solid #eee;text-align:center}
-  .pill{display:inline-block;padding:2px 6px;border-radius:999px;background:#eee;font-size:12px;margin-left:4px}
+:root{
+  --bg:#0f172a;
+  --card:#111827;
+  --soft:#1f2937;
+  --primary:#22c55e;
+  --secondary:#38bdf8;
+  --danger:#ef4444;
+  --text:#e5e7eb;
+  --muted:#9ca3af;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body{
+  font-family: "Segoe UI", Inter, system-ui, sans-serif;
+  margin:0;
+  min-height:100vh;
+  padding:18px;
+  background: linear-gradient(160deg, #020617, #0f172a);
+  color:var(--text);
+  max-width:1100px;
+  margin:auto;
+}
+
+h1{
+  font-size:1.6rem;
+  margin:6px 0 12px;
+  text-align:center;
+  letter-spacing:0.5px;
+}
+
+h3{
+  margin-top:0;
+  font-weight:600;
+  color:var(--secondary);
+}
+
+/* ESTADO SUPERIOR */
+#status{
+  background:linear-gradient(90deg, #1e3a8a, #0f172a);
+  padding:10px 14px;
+  border-radius:10px;
+  margin-bottom:16px;
+  font-size:0.95rem;
+  text-align:center;
+  box-shadow:0 0 10px rgba(56,189,248,0.3);
+}
+
+/* TARJETAS */
+.card{
+  background:linear-gradient(180deg, var(--card), #020617);
+  border-radius:18px;
+  padding:16px 16px 18px;
+  margin:14px 0;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.45);
+  border:1px solid rgba(255,255,255,0.04);
+}
+
+/* FILAS */
+.row{
+  display:flex;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+.row>*{flex:1}
+
+label{
+  display:block;
+  font-size:0.8rem;
+  margin-bottom:3px;
+  color:var(--muted);
+}
+
+/* INPUTS */
+input{
+  width:100%;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid #1f2937;
+  background:#020617;
+  color:var(--text);
+  outline:none;
+  transition:0.2s;
+}
+
+input:focus{
+  border:1px solid var(--secondary);
+  box-shadow:0 0 0 2px rgba(56,189,248,.2);
+}
+
+/* BOTONES */
+button{
+  padding:12px;
+  border-radius:14px;
+  border:none;
+  background:linear-gradient(135deg, var(--primary), #16a34a);
+  color:#022c22;
+  font-weight:bold;
+  cursor:pointer;
+  transition:0.2s;
+  letter-spacing:0.4px;
+}
+
+button:hover{
+  transform:translateY(-2px);
+  box-shadow:0 8px 20px rgba(34,197,94,0.3);
+}
+
+#stopSimBtn{
+  background:linear-gradient(135deg, var(--danger), #b91c1c);
+  color:#fff;
+}
+
+small{
+  color:var(--muted);
+  display:block;
+  margin-top:6px;
+}
+
+/* MAPA */
+#map{
+  height:420px;
+  border-radius:20px;
+  overflow:hidden;
+  border:2px solid #1f2937;
+  box-shadow: 0 0 18px rgba(56,189,248,.15);
+}
+
+/* TABLA */
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+  font-size:0.92rem;
+}
+
+th{
+  background:#020617;
+  padding:10px 6px;
+  color:var(--secondary);
+  font-weight:600;
+  border-bottom:1px solid #1f2937;
+}
+
+td{
+  padding:8px 4px;
+  border-bottom:1px solid #1f2937;
+}
+
+tr:nth-child(even){
+  background:#020617;
+}
+
+.pill{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  background:linear-gradient(135deg, #38bdf8, #0ea5e9);
+  color:#001018;
+  font-size:12px;
+  margin-left:4px;
+  font-weight:600;
+}
+
+::-webkit-scrollbar{width:8px}
+::-webkit-scrollbar-thumb{background:#1f2937;border-radius:10px}
+
+@media(max-width:760px){
+  .row{flex-direction:column;}
+  #map{height:320px;}
+  body{padding:12px;}
+}
 </style>
 </head>
+
 <body>
-<h1>Simulador buses → paradero</h1>
+
+<h1>🚌 Simulador buses → paradero</h1>
 <div id="status">Estado: listo</div>
 
 <div class="card">
-  <h3>Destino (paradero)</h3>
+  <h3>📍 Destino (paradero)</h3>
   <div class="row">
-    <div><label>Lat</label><input id="destLat"></div>
-    <div><label>Lon</label><input id="destLon"></div>
+    <div>
+      <label>Lat</label>
+      <input id="destLat">
+    </div>
+    <div>
+      <label>Lon</label>
+      <input id="destLon">
+    </div>
   </div>
   <button id="setDestBtn">Establecer destino</button>
 </div>
 
-<!-- Crear Bus -->
 <div class="card">
-  <h3>Crear bus (ruta + paraderos reales OSM)</h3>
+  <h3>🚌 Crear bus (ruta + paraderos OSM)</h3>
+
   <div class="row">
-    <div><label>Bus ID</label><input id="busId" placeholder="bus001" value="bus001"></div>
-    <div><label>Velocidad (km/h)</label><input id="speed" value="25"></div>
+    <div>
+      <label>Bus ID</label>
+      <input id="busId" value="bus001">
+    </div>
+    <div>
+      <label>Velocidad (km/h)</label>
+      <input id="speed" value="25">
+    </div>
   </div>
+
   <div class="row">
-    <div><label>Origen lat</label><input id="srcLat" placeholder="-33.02" value="-33.0066285122585"></div>
-    <div><label>Origen lon</label><input id="srcLon" placeholder="-71.54" value="-71.5451341716933"></div>
+    <div>
+      <label>Origen lat</label>
+      <input id="srcLat" value="-33.0066285122585">
+    </div>
+    <div>
+      <label>Origen lon</label>
+      <input id="srcLon" value="-71.5451341716933">
+    </div>
   </div>
+
   <div class="row">
     <button id="startSimBtn">Iniciar simulación</button>
     <button id="stopSimBtn">Detener</button>
   </div>
+
   <small>Las paradas se obtienen de OpenStreetMap a lo largo de la ruta.</small>
 </div>
 
-<div class="card"><h3>Mapa</h3><div id="map"></div></div>
+<div class="card">
+  <h3>🗺 Mapa</h3>
+  <div id="map"></div>
+</div>
 
 <div class="card">
-  <h3>Próximas llegadas</h3>
+  <h3>⏱ Próximas llegadas</h3>
   <div id="arrivals"></div>
 </div>
-
-<!--
-<div class="card">
-  <h3>RED (no oficial) — Próximos buses por paradero</h3>
-  <div class="row">
-    <input id="stopId" placeholder="PA433">
-    <button id="fetchStopBtn">Consultar</button>
-  </div>
-  <div id="stopData"></div>
-</div>
--->
 
 <script>
 (function(){
   const statusEl=document.getElementById('status');
-  const destLat=document.getElementById('destLat'); const destLon=document.getElementById('destLon');
+  const destLat=document.getElementById('destLat');
+  const destLon=document.getElementById('destLon');
   const setDestBtn=document.getElementById('setDestBtn');
-  const busIdEl=document.getElementById('busId'); const speedEl=document.getElementById('speed');
-  const srcLatEl=document.getElementById('srcLat'); const srcLonEl=document.getElementById('srcLon');
-  const startSimBtn=document.getElementById('startSimBtn'); const stopSimBtn=document.getElementById('stopSimBtn');
+  const busIdEl=document.getElementById('busId');
+  const speedEl=document.getElementById('speed');
+  const srcLatEl=document.getElementById('srcLat');
+  const srcLonEl=document.getElementById('srcLon');
+  const startSimBtn=document.getElementById('startSimBtn');
+  const stopSimBtn=document.getElementById('stopSimBtn');
   const arrivalsEl=document.getElementById('arrivals');
-  const stopIdEl=document.getElementById('stopId'); const fetchStopBtn=document.getElementById('fetchStopBtn'); const stopDataEl=document.getElementById('stopData');
+
+  const stopIdEl=document.getElementById('stopId');
+  const fetchStopBtn=document.getElementById('fetchStopBtn');
+  const stopDataEl=document.getElementById('stopData');
 
   let map=L.map('map'); 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
@@ -169,14 +360,12 @@
           <th>Dist</th>
           <th>ETA</th>
           <th>Paradas</th>
-          <!-- <th>Ocupación</th> -->
-          <!-- <th>%</th> -->
           <th>Status</th>
           <th>Estado</th>
         </tr>`;
 
       if(list.length===0){
-        html+=`<tr><td colspan="8"><i>Sin buses</i></td></tr>`;
+        html+=`<tr><td colspan="6"><i>Sin buses</i></td></tr>`;
         statusEl.textContent='Estado: sin buses';
       } else {
         statusEl.textContent=`Próxima llegada: ${list[0].bus_id} en ${list[0].eta_min.toFixed(1)} min`;
@@ -195,9 +384,6 @@
 
           const si=b.stops_total>0?`${b.stops_next_idx}/${b.stops_total}`:'—';
           const state=b.arrived?'En paradero':(b.is_dwell?'En parada':(b.has_route?'En ruta':'Recta'));
-
-          const occCount = b.occ_count ?? '—';
-          const occPct = b.occ_pct != null ? `${b.occ_pct}%` : '—';
           const occStatus = b.occ_status ?? '—';
 
           html+=`
@@ -206,8 +392,6 @@
             <td>${b.distance_km.toFixed(2)} km</td>
             <td>${b.eta_min.toFixed(1)} min</td>
             <td>${si}</td>
-            <!-- <td>${occCount}</td> -->
-            <!-- <td>${occPct}</td> -->
             <td>${occStatus}</td>
             <td>${state}</td>
           </tr>`;
@@ -223,18 +407,22 @@
   setInterval(refreshBuses, 1000); 
   refreshBuses();
 
-  fetchStopBtn.onclick=async()=>{
-    const s=(stopIdEl.value||'').trim(); 
-    if(!s){alert('Ingresa stop_id');return;}
+  if(fetchStopBtn){
+      fetchStopBtn.onclick=async()=>{
+        const s=(stopIdEl.value||'').trim(); 
+        if(!s){alert('Ingresa stop_id');return;}
 
-    try{ 
-      const j=await (await fetch('/red/arrivals/'+encodeURIComponent(s))).json(); 
-      stopDataEl.innerHTML='<pre>'+JSON.stringify(j.data||j,null,2)+'</pre>'; 
-    } catch(_){ 
-      stopDataEl.textContent='Error'; 
-    }
-  };
+        try{ 
+          const j=await (await fetch('/red/arrivals/'+encodeURIComponent(s))).json(); 
+          stopDataEl.innerHTML='<pre>'+JSON.stringify(j.data||j,null,2)+'</pre>'; 
+        } catch(_){ 
+          stopDataEl.textContent='Error'; 
+        }
+      };
+  }
+
 })();
 </script>
+
 </body>
 </html>
